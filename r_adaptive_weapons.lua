@@ -73,16 +73,18 @@ local Helpers = {
 }
 
 local MathHelpers = {
-    DistanceTo = function(xyz1, xyz2)
-        local From = MathSqrt(xyz1[1]*xyz1[1]) + MathSqrt(xyz1[2]*xyz1[2]) + MathSqrt(xyz1[3]*xyz1[3])
-        local To = MathSqrt(xyz2[1]*xyz2[1]) + MathSqrt(xyz2[2]*xyz2[2]) + MathSqrt(xyz2[3]*xyz2[3])
+    DistanceTo = function(from, to)
+        local from = { x = from[1], y = from[2], z = from[3] }
+        local to = { x = to[1], y = to[2], z = to[3] }
+        local subtraction = { x = to.x - from.x, y = to.y - from.y, z = to.z - from.z }
+        local result = MathSqrt((subtraction.x * subtraction.x) + (subtraction.y * subtraction.y))
 
-        return (From - To)
+        return result
     end,
     UnitsToFeet = function(units)
-        local Meters = MathFloor((units * 0.0254) + 0.5)
+        local Meters = MathFloor((units * 0.0254))
     
-        return MathFloor((Meters * 3.281) + 0.5)
+        return MathFloor((Meters * 3.281))
     end,
     OnGround = function(entindex)
         return (BitBand(EntityGetProp(entindex, "m_fFlags"), 1) ~= 0)
@@ -148,6 +150,7 @@ end
 
 local function GetClosestEnemy()
     local LocalOrigin = { EntityGetOrigin(EntityGetLocalPlayer()) }
+
     local NearestDistance, NearestEntity
     local Players = EntityGetPlayers(true)
 
@@ -160,18 +163,16 @@ local function GetClosestEnemy()
 
         local TargetOrigin = { EntityGetOrigin(Player) }
         local DistanceToTarget = MathHelpers.DistanceTo(LocalOrigin, TargetOrigin)
-
         if NearestDistance == nil or DistanceToTarget < NearestDistance then
             NearestEntity = Player
             NearestDistance = DistanceToTarget
         end
-
-        if NearestDistance and NearestEntity then
-            return NearestEntity, MathHelpers.UnitsToFeet(NearestDistance)
-        end
     end
-
-    return nil, 0
+    if NearestDistance and NearestEntity then
+        return NearestEntity, MathHelpers.UnitsToFeet(NearestDistance)
+    else
+        return nil, 0
+    end
 end
 --#endregion
 --#region Menu & References
@@ -251,13 +252,9 @@ end
 --#endregion
 --#region Main Functions
 local function DoNoscope(key)
-    local Me = EntityGetLocalPlayer()
-
     local WpnDist = UIGet(WeaponInfo[key].NoscopeDistance)
     local Data = { GetClosestEnemy() }
-    local IsScoped = EntityGetProp(Me, "m_bIsScoped") ~= 0 and true or false
-
-    if Data[1] ~= nil and Data[2] < WpnDist and not IsScoped then
+    if Data[1] ~= nil and MathAbs(Data[2]) < WpnDist then
         return true
     end
 
@@ -266,6 +263,8 @@ end
 
 local function UpdateSettings(key)
     local Active = WeaponInfo[key]
+    local Me = EntityGetLocalPlayer()
+    local IsScoped = EntityGetProp(Me, "m_bIsScoped") ~= 0 and true or false
 
     local Run = function()
         for Name, Ref in pairs(Reference) do
@@ -294,7 +293,7 @@ local function UpdateSettings(key)
                 else
                     local Result = DoNoscope(key)
                     if DoNoscope(key) then
-                        UISet(Reference.AutoScope, UIGet(Active.AutoScope))
+                        UISet(Reference.AutoScope, not Result)
                     end
                 end
             else
@@ -306,7 +305,7 @@ local function UpdateSettings(key)
     
                 if UIGet(Active.InAir) and not MathHelpers.OnGround(EntityGetLocalPlayer()) then
                     FinalHitChance = UIGet(Active.InAirHitChance)
-                elseif UIGet(Active.Noscope) then
+                elseif UIGet(Active.Noscope) and DoNoscope(key) and not IsScoped then
                     FinalHitChance = UIGet(Active.HitChanceNoscope)
                 end
     
@@ -433,9 +432,16 @@ local function OnPaint()
     local R, G, B, A = UIGet(Ctrl.MasterColor)
     local YOffset = 13
 
+    if DamageOverride then
+        --RendererText(XC, YC + YOffset, R, G, B, A, "cb", 400, "DMG " .. UIGet(Reference.Damage))
+        --YOffset = YOffset + 11
+        renderer.indicator(212, 209, 206, 255, "DMG: " .. UIGet(Reference.Damage))
+    end
+
     if NoScoping == false then
-        RendererText(XC, YC + YOffset, R, G, B, A, "cb", 400, "NOSCOPE")
-        YOffset = YOffset + 11
+        --RendererText(XC, YC + YOffset, R, G, B, A, "cb", 400, "NOSCOPE")
+        --YOffset = YOffset + 11
+        renderer.indicator(187, 128, 255, 255, "NOSCOPE")
     end
 
     -- if DamageOverride then
